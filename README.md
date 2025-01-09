@@ -139,35 +139,65 @@ ansible -i inventory -m ping all
 *change directory to ~/kubernetes_the_hard_way/ansible*
 
 1. Install K8s client tools
-    `ansible-playbook -i inventory -v client_tools.yaml`
+```
+ansible-playbook -i inventory -v client_tools.yaml
+```
 2. Append nodes to /etc/hosts
-    `ansible-playbook -i inventory -v append_hosts.yaml`
+```
+ansible-playbook -i inventory -v append_hosts.yaml
+```
 3. Provision the CA
-    `ansible-playbook -i inventory -v certificate_authority.yaml`
+```
+ansible-playbook -i inventory -v certificate_authority.yaml
+```
 4. Create client and server certificates
-    `ansible-playbook -i inventory -v client_server_certificates.yaml`
+```
+ansible-playbook -i inventory -v client_server_certificates.yaml
+```
 5. Distribute the certificates
-    `ansible-playbook -i inventory -v distribute_certificates.yaml`
+```
+ansible-playbook -i inventory -v distribute_certificates.yaml
+```
 6. Generate Kubernetes Configuration Files for Authentication
-    `ansible-playbook -i inventory -v create_kubeconfigs.yaml`
+```
+ansible-playbook -i inventory -v create_kubeconfigs.yaml
+```
 7. Distribute the Kubernetes Configuration Files
-    `ansible-playbook -i inventory -v distribute_kubeconfigs.yaml`
+```
+ansible-playbook -i inventory -v distribute_kubeconfigs.yaml
+```
 8. Bootstrapping the etcd Cluster
-    `ansible-playbook -i inventory -v bootstrap_etcd_cluster.yaml`
+```
+ansible-playbook -i inventory -v bootstrap_etcd_cluster.yaml
+```
 9. Bootstrapping the Kubernetes Control Plane
-    `ansible-playbook -i inventory -v bootstrap_control_plane.yaml`
+```
+ansible-playbook -i inventory -v bootstrap_control_plane.yaml
+```
 10. Configure RBAC permissions to allow the Kubernetes API Server to access the Kubelet API on each worker node. 
-    `ansible-playbook -i inventory -v rbac_auth.yaml`
+```
+ansible-playbook -i inventory -v rbac_auth.yaml
+```
 11. Bootstrapping the worker nodes
-    `ansible-playbook -i inventory -v bootstrap_worker_nodes.yaml`
+```
+ansible-playbook -i inventory -v bootstrap_worker_nodes.yaml
+```
 12. Configuring kubectl for Remote Access
-    `ansible-playbook -i inventory -v remote_kubectl.yaml`
+```
+ansible-playbook -i inventory -v remote_kubectl.yaml
+```
 13. Install helm
-    `ansible-playbook -i inventory -v install_helm.yaml`
+```
+ansible-playbook -i inventory -v install_helm.yaml
+```
 14. Installing Weave Network. 
-    `ansible-playbook -i inventory -v deploy_weavenet.yaml`
+```
+ansible-playbook -i inventory -v deploy_weavenet.yaml
+```
 15. Deploy core DNS. 
-    `ansible-playbook -i inventory -v deploy_coredns.yaml`
+```
+ansible-playbook -i inventory -v deploy_coredns.yaml
+```
 
 
 # Clean Up
