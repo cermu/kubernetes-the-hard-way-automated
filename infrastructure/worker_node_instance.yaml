@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: 2010-09-09
+# K8s-worker-nodes-instance
+Description: >
+  Deploy a K8s Control Plane EC2 instance
+Transform: 'AWS::LanguageExtensions'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Instance Configuration"
+        Parameters:
+          - InstanceType
+          - AMIId
+          - KeyName
+          - IntancesToCreate
+          - EC2InstanceProfileName
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - PrivateSubnetId
+          - SecurityGroupIds
+
+Parameters:
+  IntancesToCreate:
+    Type: CommaDelimitedList
+    Description: >
+      Name of worker node instances to create
+    Default: "WorkerNode1, WorkerNode2"
+  EC2InstanceProfileName:
+    Type: String
+    Default: k8sthw-instance-profile
+    Description: EC2 instance profile name
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: EC2 instance type
+    AllowedValues:
+         - t2.micro
+         - t2.small
+         - t2.medium
+  AMIId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0d64bb532e0502c46
+    Description: Amazon Machine Image (AMI) ID
+  PrivateSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for a private subnet
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: List of security group IDs to associate with the instance
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: my_keypair_name
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+
+Resources:
+  Fn::ForEach::Nodes:
+    - WorkerNode
+    - !Ref IntancesToCreate
+    - '${WorkerNode}':
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIId
+          InstanceType: !Ref InstanceType
+          IamInstanceProfile: !Ref EC2InstanceProfileName
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1
+              Ebs:
+                VolumeSize: 30
+                VolumeType: gp2
+                DeleteOnTermination: true
+          KeyName: !Ref KeyName
+          SecurityGroupIds:
+            - !Ref SecurityGroupId
+          SubnetId: !Ref PrivateSubnetId
+          Tags:
+            - Value: !Ref WorkerNode
+              Key: Name
+            - Key: auto-delete
+              Value: never
+            - Key: Project
+              Value: k8sthw
+          UserData:
+            Fn::Base64: !Sub |
+              #!/bin/bash -xe
+              sudo apt-get update -y
+              sudo swapoff -a
+
+Outputs:
+  WorkerNode1InstanceId:
+    Description: The ID of WorkerNode1 instance
+    Value: !Ref WorkerNode1
+  WorkerNode2InstanceId:
+    Description: The ID of WorkerNode2 instance
+    Value: !Ref WorkerNode2

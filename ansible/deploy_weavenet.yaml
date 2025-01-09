@@ -1,0 +1,50 @@
+- hosts: workers
+  name: Deploy Weave Network to worker nodes
+  serial: 1
+  gather_facts: true
+
+  vars:
+    downloads_location: "/home/ubuntu/downloads"
+    certs_location: "/home/ubuntu"
+    binaries_location: "/home/ubuntu/binaries"
+  
+  tasks:
+    - name: enable IP forwarding
+      shell: |
+        sysctl net.ipv4.conf.all.forwarding=1
+        echo "net.ipv4.conf.all.forwarding=1" | tee -a /etc/sysctl.conf
+      become: true
+      become_user: root
+    
+- hosts: local
+  name: Install Weave Network using Kubectl from remote machine
+  become: true
+  become_user: ubuntu
+  gather_facts: false
+
+  tasks:
+    - name: Install Weave Network
+      shell: |
+        kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
+    
+    - name: Pause for 1 minute to build Weave Net containers
+      pause:
+        minutes: 1
+
+    - name: Get pods in kube-system namespace
+      shell: kubectl get pods -n kube-system
+      register: pods
+
+    - name: Show kubectl get pods -n kube-system results and look out for Weave Net pods
+      debug:
+        msg:
+        - "{{ pods.stdout_lines }}"
+    
+    - name: Check if the worker nodes are now ready
+      shell: kubectl get nodes
+      register: nodes
+      no_log: True
+
+    - name: Print the results of kubectl get nodes command
+      debug:
+        msg: "{{ nodes.stdout_lines }}"

@@ -1,0 +1,81 @@
+- hosts: controller
+  name: Configure RBAC permissions for API server
+  become: true
+  become_user: ubuntu
+  gather_facts: true
+
+  vars:
+    configs_location: "/home/ubuntu/configs"
+
+  tasks:
+    - name: Create remote configs directory if it does not exist
+      file:
+        path: "{{ configs_location }}"
+        state: directory
+        mode: 0755
+    
+    - name: Create the `kube-apiserver-to-kubelet.yaml` config
+      shell: |
+        cat << EOF | tee {{ configs_location }}/kube-apiserver-to-kubelet.yaml
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: system:kube-apiserver-to-kubelet
+          annotations:
+            rbac.authorization.kubernetes.io/autoupdate: "true"
+          labels:
+            kubernetes.io/bootstrapping: rbac-defaults
+        rules:
+          - apiGroups:
+            - ""
+            resources:
+              - nodes/proxy
+              - nodes/stats
+              - nodes/log
+              - nodes/spec
+              - nodes/metrics
+            verbs:
+              - "*"
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: system:kube-apiserver
+          namespace: ""
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: system:kube-apiserver-to-kubelet
+        subjects:
+          - apiGroup: rbac.authorization.k8s.io
+            kind: User
+            name: kubernetes
+        EOF
+
+    - name: Create the `system:kube-apiserver-to-kubelet` ClusterRole with the necessary permissions
+      shell: |
+        kubectl apply -f {{ configs_location }}/kube-apiserver-to-kubelet.yaml --kubeconfig=/home/ubuntu/admin.kubeconfig
+      register: kubectl_results
+
+    - name: Print the results of the kubectl command
+      debug:
+        msg: "{{ kubectl_results.stdout_lines }}"
+
+- hosts: local
+  name: Verify that the control plane is up and running
+  become: true
+  become_user: ubuntu
+  gather_facts: true
+
+  vars:
+    certs_location: "/home/ubuntu/certs"
+  
+  tasks:
+    - name: Check the API Server version
+      shell: |
+        curl -k --cacert {{ certs_location }}/ca.crt https://controlnode1.kubernetes.local:6443/version
+      register: curl_results
+
+    - name: Print the results of the curl command
+      debug:
+        msg: "{{ curl_results.stdout_lines }}"

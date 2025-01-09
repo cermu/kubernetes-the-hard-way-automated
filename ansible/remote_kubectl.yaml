@@ -1,0 +1,49 @@
+- hosts: local
+  name: Configuring kubectl for Remote Access
+  become: true
+  become_user: ubuntu
+  gather_facts: true
+
+  vars:
+    certs_location: "/home/ubuntu/certs"
+
+  tasks:
+    - name: Generate a kubeconfig file for authenticating as the admin user
+      shell: |
+        {
+          kubectl config set-cluster kubernetes-the-hard-way \
+            --certificate-authority={{ certs_location }}/ca.crt \
+            --embed-certs=true \
+            --server=https://controlnode1.kubernetes.local:6443
+
+          kubectl config set-credentials admin \
+            --client-certificate={{ certs_location }}/admin.crt \
+            --client-key={{ certs_location }}/admin.key \
+            --embed-certs=true
+
+          kubectl config set-context kubernetes-the-hard-way \
+            --cluster=kubernetes-the-hard-way \
+            --user=admin
+
+          kubectl config use-context kubernetes-the-hard-way
+        }
+    
+    - name: Test kubectl version
+      shell: kubectl version
+      register: version
+      no_log: True
+
+    - name: Show kubectl version results 
+      debug:
+        msg:
+        - "{{ version.stdout_lines }}"  
+
+    - name: Test kubectl get nodes
+      shell: kubectl get nodes
+      register: nodes
+      no_log: True
+
+    - name: Show kubectl get nodes results 
+      debug:
+        msg:
+        - "{{ nodes.stdout_lines }}" 

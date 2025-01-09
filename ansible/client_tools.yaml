@@ -1,0 +1,64 @@
+- hosts: localhost
+  name: Install Client Tools
+  become: true
+  become_user: ubuntu
+  gather_facts: true
+
+  vars:
+    RELEASE: "v1.31.2"
+
+  tasks:
+    - name: Install curl
+      apt:
+        name: curl
+        state: present
+        update_cache: yes
+      become_user: root
+    
+    - name: Install openssl
+      apt:
+        name: openssl
+        state: present
+        update_cache: yes
+      become_user: root
+
+    - name: Create downloads Directory
+      file:
+        path: /home/ubuntu/downloads
+        state: directory
+        mode: 0755
+    
+    - name: Download K8s components binaries 
+      get_url:
+        url: "{{ item }}"
+        dest: /home/ubuntu/downloads/
+        mode: 0755
+      loop:
+        - https://dl.k8s.io/{{ RELEASE }}/bin/linux/amd64/kubectl
+        - https://dl.k8s.io/{{ RELEASE }}/bin/linux/amd64/kube-apiserver
+        - https://dl.k8s.io/{{ RELEASE }}/bin/linux/amd64/kube-controller-manager
+        - https://dl.k8s.io/{{ RELEASE }}/bin/linux/amd64/kube-scheduler
+        - https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.31.1/crictl-v1.31.1-linux-amd64.tar.gz
+        - https://github.com/opencontainers/runc/releases/download/v1.2.1/runc.amd64
+        - https://github.com/containernetworking/plugins/releases/download/v1.6.0/cni-plugins-linux-amd64-v1.6.0.tgz
+        - https://github.com/containerd/containerd/releases/download/v2.0.0/containerd-2.0.0-linux-amd64.tar.gz
+        - https://dl.k8s.io/{{ RELEASE }}/bin/linux/amd64/kube-proxy
+        - https://dl.k8s.io/{{ RELEASE }}/bin/linux/amd64/kubelet
+        - https://github.com/etcd-io/etcd/releases/download/v3.4.34/etcd-v3.4.34-linux-amd64.tar.gz
+
+    - name: Install kubectl
+      copy:
+        src: /home/ubuntu/downloads/kubectl
+        dest: /usr/local/bin/
+        mode: a+x
+      become_user: root
+      
+    - name: Get kubectl version
+      shell: kubectl version --client
+      register: kubectl_version
+      become_user: root
+
+    - name: Show kubectl version
+      debug:
+        msg:
+        - "{{ kubectl_version.stdout_lines }}" 

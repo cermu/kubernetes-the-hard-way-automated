@@ -1,0 +1,53 @@
+- hosts: local
+  name: Install helm
+  gather_facts: true
+
+  vars:
+    RELEASE: "v3.16.4"
+
+  tasks:
+    - name: Create downloads Directory
+      file:
+        path: /home/ubuntu/downloads
+        state: directory
+        mode: 0755
+      become: true
+      become_user: ubuntu
+    
+    - name: Download helm binaries 
+      get_url:
+        url: "{{ item }}"
+        dest: /home/ubuntu/downloads/
+        mode: 0755
+      loop:
+        - https://get.helm.sh/helm-{{ RELEASE }}-linux-amd64.tar.gz
+      become: true
+      become_user: ubuntu
+
+    - name: Extract helm-{{ RELEASE }}-linux-amd64.tar.gz into /usr/local/bin/
+      unarchive:
+        src: /home/ubuntu/downloads/helm-{{ RELEASE }}-linux-amd64.tar.gz
+        dest: /home/ubuntu/downloads/
+        mode: a+x
+        remote_src: yes
+      become: true
+      become_user: root 
+
+    - name: Move helm to /usr/local/bin/
+      copy:
+        src: /home/ubuntu/downloads/linux-amd64/helm
+        dest: /usr/local/bin/
+        mode: a+x
+        remote_src: yes
+      become: true
+      become_user: root
+      
+    - name: Get helm version
+      shell: helm version
+      register: version
+      become_user: root
+
+    - name: Show helm version
+      debug:
+        msg:
+        - "{{ version.stdout_lines }}" 

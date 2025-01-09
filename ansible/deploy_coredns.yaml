@@ -1,0 +1,26 @@
+- hosts: local
+  name: Install CoreDNS using helm from remote machine
+  become: true
+  become_user: ubuntu
+  gather_facts: false
+
+  tasks:
+    - name: Install CoreDNS using helm
+      shell: |
+        {
+          helm repo add coredns https://coredns.github.io/helm
+          helm --namespace=kube-system install coredns coredns/coredns --set service.clusterIP=10.32.0.10
+        }
+
+    - name: Pause for 1 minute to build CoreDNS containers
+      pause:
+        minutes: 1
+
+    - name: Get pods in kube-system namespace
+      shell: kubectl get pods -n kube-system
+      register: pods
+
+    - name: Show kubectl get pods -n kube-system results and look out for coredns pods
+      debug:
+        msg:
+        - "{{ pods.stdout_lines }}"

@@ -1,0 +1,133 @@
+- hosts: controller
+  name: Bootstrap ETCD cluster
+  gather_facts: true
+
+  vars:
+    downloads_location: "/home/ubuntu/downloads"
+    remote_location: "/tmp"
+    remote_certs_location: "/home/ubuntu"
+
+  tasks:
+    - name: copy etcd binaries to controller node
+      copy: 
+        src: "{{ downloads_location }}/etcd-v3.4.34-linux-amd64.tar.gz"
+        dest: "{{ remote_location }}"
+        mode: 0440
+      become: true
+      become_user: root
+      
+    - name: Extract etcd into {{ remote_location }}
+      unarchive:
+        src: "{{ remote_location }}/etcd-v3.4.34-linux-amd64.tar.gz"
+        dest: "{{ remote_location }}"
+        remote_src: yes
+      become: true
+      become_user: root
+
+    - name: Move etcd to /usr/local/bin
+      shell: mv {{ remote_location }}/etcd-v3.4.34-linux-amd64/etcd* /usr/local/bin
+      become: true
+      become_user: root
+
+    - name: Create etcd directory
+      shell: |
+        { 
+          mkdir -p /etc/etcd /var/lib/etcd
+          chmod 700 /var/lib/etcd
+        }
+      become: true
+      become_user: root
+
+    - name: Copy kubernetes keys and CA certificate to /etc/etcd folder
+      copy:
+        src: "{{ remote_certs_location }}/{{ item }}"
+        dest: /etc/etcd/
+        remote_src: yes
+      become: true
+      become_user: root
+      with_items:
+        - ca.crt
+        - kube-api-server.key
+        - kube-api-server.crt
+
+    - name: Set ETCD_NAME as fact
+      set_fact:
+        ETCD_NAME: "{{ 'controlnode1' if inventory_hostname == 'controlnode1' else 'controlnode2' if inventory_hostname == 'controlnode2' else 'controlnode0' }}"
+      become: true
+      become_user: ubuntu
+
+    - name: Get private IP
+      shell: |
+        {
+          TOKEN=$(curl -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" -X PUT http://169.254.169.254/latest/api/token)
+          PRIVATE_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4) && echo $PRIVATE_IP
+        }
+      register: private_ip
+      become: true
+      become_user: ubuntu
+
+    - name: Set private IP as fact
+      set_fact: PRIVATE_IP="{{ private_ip.stdout }}"
+      become: true
+      become_user: ubuntu
+
+    - name: Create the `etcd.service` systemd unit file
+      shell: |
+        cat <<EOF | sudo tee /etc/systemd/system/etcd.service
+        [Unit]
+        Description=etcd
+        Documentation=https://github.com/coreos
+
+        [Service]
+        ExecStart=/usr/local/bin/etcd \\
+          --name {{ ETCD_NAME }} \\
+          --cert-file=/etc/etcd/kube-api-server.crt \\
+          --key-file=/etc/etcd/kube-api-server.key \\
+          --peer-cert-file=/etc/etcd/kube-api-server.crt \\
+          --peer-key-file=/etc/etcd/kube-api-server.key \\
+          --trusted-ca-file=/etc/etcd/ca.crt \\
+          --peer-trusted-ca-file=/etc/etcd/ca.crt \\
+          --peer-client-cert-auth \\
+          --client-cert-auth \\
+          --initial-advertise-peer-urls https://{{ PRIVATE_IP }}:2380 \\
+          --listen-peer-urls https://{{ PRIVATE_IP }}:2380 \\
+          --listen-client-urls https://{{ PRIVATE_IP }}:2379,http://127.0.0.1:2379 \\
+          --advertise-client-urls https://{{ PRIVATE_IP }}:2379 \\
+          --initial-cluster-token etcd-cluster-0 \\
+          --initial-cluster {{ ETCD_NAME }}=https://{{ PRIVATE_IP }}:2380 \\
+          --initial-cluster-state new \\
+          --data-dir=/var/lib/etcd
+        Restart=on-failure
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      become: true
+      become_user: root
+
+    - name: Start the etcd service
+      systemd:
+        name: etcd
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      become: true
+      become_user: root
+
+    - pause:
+        seconds: 45
+
+    - name: Verify etcd bootstrapping
+      shell: |
+        ETCDCTL_API=3 etcdctl member list
+      register: etcd_members
+      become: true
+      become_user: root
+
+    - name: Show etcd member list output
+      debug:
+        msg:
+        - "{{ etcd_members.stdout_lines }}" 
+      become: true
+      become_user: ubuntu

@@ -1,0 +1,357 @@
+- hosts: workers
+  name: Bootstrap the worker nodes
+  serial: 1
+  gather_facts: true
+
+  vars:
+    downloads_location: "/home/ubuntu/downloads"
+    certs_location: "/home/ubuntu"
+    binaries_location: "/home/ubuntu/binaries"
+  
+  tasks:
+    - name: Set HOSTNAME as fact
+      set_fact:
+        HOSTNAME: "{{ 'workernode1' if inventory_hostname == 'workernode1' else 'workernode2' if inventory_hostname == 'workernode2' else 'workernodex' }}"
+
+    - name: Print the set HOSTNAME fact
+      debug:
+        msg:
+        - "This machine HOSTNAME is: '{{ HOSTNAME }}'" 
+
+    - name: Create remote binaries directory if it does not exist
+      file:
+        path: "{{ binaries_location }}"
+        state: directory
+        mode: 0755
+      become: true
+      become_user: ubuntu
+
+    - name: Copy kubernetes binaries to each node
+      copy: 
+        src: "{{ downloads_location }}/{{ item }}"
+        dest: "{{ binaries_location }}"
+      loop:
+        - runc.amd64
+        - crictl-v1.31.1-linux-amd64.tar.gz
+        - cni-plugins-linux-amd64-v1.6.0.tgz
+        - containerd-2.0.0-linux-amd64.tar.gz
+        - kubectl
+        - kubelet
+        - kube-proxy
+      become: true
+      become_user: ubuntu
+
+    - name: Rename runc.amd64 to runc
+      shell: mv "{{ binaries_location }}/runc.amd64" "{{ binaries_location }}/runc"
+      become: true
+      become_user: ubuntu
+
+    - name: Install socat conntrack and ipset
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - socat
+        - conntrack
+        - ipset
+      become: true
+      become_user: root
+
+    - name: Create remote certs directory if it does not exist
+      file:
+        path: "{{ certs_location }}"
+        state: directory
+        mode: 0755
+      become: true
+      become_user: ubuntu
+    
+    - name: Create the installations directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - /etc/cni/net.d
+        - /opt/cni/bin
+        - /var/lib/kubelet
+        - /var/lib/kube-proxy
+        - /var/lib/kubernetes
+        - /var/run/kubernetes
+      become: true
+      become_user: root
+  
+    - name: Install the worker binaries
+      copy:
+        src: "{{ binaries_location }}/{{ item }}"
+        dest: "/usr/local/bin/"
+        remote_src: yes
+      loop:
+        - kubectl
+        - kubelet
+        - kube-proxy
+        - runc
+      become: true
+      become_user: root
+
+    - name: Extract crictl-v1.31.1-linux-amd64.tar.gz into /usr/local/bin/
+      unarchive:
+        src: "{{ binaries_location }}/crictl-v1.31.1-linux-amd64.tar.gz"
+        dest: /usr/local/bin/
+        remote_src: yes
+      become: true
+      become_user: root    
+
+    - name: Make the worker binaries executable
+      shell: "chmod +x /usr/local/bin/{{ item }}"
+      loop:
+        - crictl
+        - kubectl
+        - kubelet
+        - kube-proxy
+        - runc
+      become: true
+      become_user: root
+
+    - name: Extract cni-plugins-linux-amd64-v1.6.0.tgz into /opt/cni/bin/
+      shell: "tar -xvzf {{ binaries_location }}/cni-plugins-linux-amd64-v1.6.0.tgz  -C /opt/cni/bin/"
+      become: true
+      become_user: root
+    
+    - name: Load the overlay and br_netfilter module required for networking
+      shell: |
+        {
+          sudo modprobe overlay
+          sudo modprobe br_netfilter
+        }
+      become: true
+      become_user: root
+
+    - name: Create /etc/modules-load.d/containerd.conf config file
+      shell: |
+        cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+        overlay
+        br_netfilter
+        EOF
+      become: true
+      become_user: root
+
+    - name: Create /etc/sysctl.d/kubernetes.conf config file
+      shell: |
+        cat <<EOF | sudo tee /etc/sysctl.d/kubernetes.conf
+        net.bridge.bridge-nf-call-ip6tables = 1
+        net.bridge.bridge-nf-call-iptables = 1
+        net.ipv4.ip_forward = 1
+        EOF
+      become: true
+      become_user: root
+
+    - name: Apply the new settings without restarting
+      shell: |
+        sudo sysctl -system
+      become: true
+      become_user: root
+
+    - name: Create /home/ubuntu/containerd directory if it does not exist
+      file:
+        path: /home/ubuntu/containerd/
+        state: directory
+        mode: 0755
+      become: true
+      become_user: ubuntu
+
+    - name: Extract containerd-2.0.0-linux-amd64.tar.gz  into /home/ubuntu/containerd/
+      unarchive:
+        src: "{{ binaries_location }}/containerd-2.0.0-linux-amd64.tar.gz"
+        dest: /home/ubuntu/containerd/
+        remote_src: yes
+      become: true
+      become_user: ubuntu
+
+    - name: Move containerd to /bin/
+      shell: mv -v /home/ubuntu/containerd/bin/* /bin/ 
+      become: true
+      become_user: root
+
+    - name: Create /etc/containerd/ directory if it does not exist
+      file:
+        path: /etc/containerd/
+        state: directory
+      become: true
+      become_user: root
+    
+    - name: Create the config.toml
+      shell: |
+        cat << EOF | sudo tee /etc/containerd/config.toml
+        version = 2
+
+        [plugins."io.containerd.grpc.v1.cri"]
+          [plugins."io.containerd.grpc.v1.cri".containerd]
+            snapshotter = "overlayfs"
+            default_runtime_name = "runc"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+            runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+            SystemdCgroup = true
+        [plugins."io.containerd.grpc.v1.cri".cni]
+          bin_dir = "/opt/cni/bin"
+          conf_dir = "/etc/cni/net.d"
+        EOF
+      become: true
+      become_user: root
+
+    - name: Create the `containerd.service` systemd unit file
+      shell: |
+        cat <<EOF | sudo tee /etc/systemd/system/containerd.service
+        [Unit]
+        Description=containerd container runtime
+        Documentation=https://containerd.io
+        After=network.target
+
+        [Service]
+        ExecStartPre=/sbin/modprobe overlay
+        ExecStart=/bin/containerd
+        Restart=always
+        RestartSec=5
+        Delegate=yes
+        KillMode=process
+        OOMScoreAdjust=-999
+        LimitNOFILE=1048576
+        LimitNPROC=infinity
+        LimitCORE=infinity
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      become: true
+      become_user: root
+
+    - name: Create the kubelet config file
+      shell: |
+        cat <<EOF | sudo tee /var/lib/kubelet/kubelet-config.yaml
+        apiVersion: kubelet.config.k8s.io/v1beta1
+        kind: KubeletConfiguration
+        authentication:
+          anonymous:
+            enabled: false
+          webhook:
+            enabled: true
+          x509:
+            clientCAFile: "/var/lib/kubelet/ca.crt"
+        authorization:
+          mode: Webhook
+        clusterDomain: "cluster.local"
+        clusterDNS:
+          - "10.32.0.10"
+        cgroupDriver: systemd
+        containerRuntimeEndpoint: "unix:///var/run/containerd/containerd.sock"
+        resolvConf: "/run/systemd/resolve/resolv.conf"
+        runtimeRequestTimeout: "15m"
+        tlsCertFile: "/var/lib/kubelet/kubelet.crt"
+        tlsPrivateKeyFile: "/var/lib/kubelet/kubelet.key"
+        EOF
+      become: true
+      become_user: root
+
+    - name: Create the `kubelet.service` systemd unit file
+      shell: |
+        cat << EOF | sudo tee /etc/systemd/system/kubelet.service
+        [Unit]
+        Description=Kubernetes Kubelet
+        Documentation=https://github.com/kubernetes/kubernetes
+        After=containerd.service
+        Requires=containerd.service
+
+        [Service]
+        ExecStart=/usr/local/bin/kubelet \\
+          --config=/var/lib/kubelet/kubelet-config.yaml \\
+          --kubeconfig=/var/lib/kubelet/kubeconfig \\
+          --register-node=true \\
+          --v=2 \\
+          --hostname-override={{ HOSTNAME }}
+        Restart=on-failure
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      become: true
+      become_user: root
+
+    - name: Create the kube-proxy config file
+      shell: |
+        cat <<EOF | sudo tee /var/lib/kube-proxy/kube-proxy-config.yaml
+        apiVersion: kubeproxy.config.k8s.io/v1alpha1
+        kind: KubeProxyConfiguration
+        clientConnection:
+          kubeconfig: "/var/lib/kube-proxy/kubeconfig"
+        mode: "iptables"
+        clusterCIDR: "10.200.0.0/16"
+        EOF
+      become: true
+      become_user: root
+
+    - name: Create the `kube-proxy.service` systemd unit file
+      shell: |
+        cat <<EOF | sudo tee /etc/systemd/system/kube-proxy.service
+        [Unit]
+        Description=Kubernetes Kube Proxy
+        Documentation=https://github.com/kubernetes/kubernetes
+
+        [Service]
+        ExecStart=/usr/local/bin/kube-proxy \\
+          --config=/var/lib/kube-proxy/kube-proxy-config.yaml \\
+          --hostname-override={{ HOSTNAME }}
+        Restart=on-failure
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      become: true
+      become_user: root
+
+    - name: Start the worker node services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      loop:
+        - containerd.service
+        - kubelet.service
+        - kube-proxy
+      become: true
+      become_user: root
+    
+    - pause:
+        seconds: 10
+
+    - name: Check all the services are active (running)
+      shell: systemctl status containerd.service kubelet.service kube-proxy
+      register: services_result
+      no_log: True
+      become: true
+      become_user: root
+
+    - name: Show service results 
+      debug:
+        msg:
+        - "{{ services_result.stdout_lines }}"
+
+- hosts: controller [0]
+  name: Verify that the worker nodes have been bootstrapped correctly
+  become: true
+  become_user: ubuntu
+  gather_facts: false
+  
+  tasks:
+    - pause:
+        seconds: 45
+
+    - name: Get the nodes
+      shell: kubectl get nodes --kubeconfig /home/ubuntu/admin.kubeconfig
+      register: kubectl_result
+      no_log: True
+
+    - name: Print the results of kubectl get nodes command
+      debug:
+        msg: "{{ kubectl_result.stdout_lines }}"

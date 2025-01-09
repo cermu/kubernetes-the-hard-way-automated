@@ -1,0 +1,102 @@
+- hosts: workers
+  name: Distribute Certificates to worker nodes
+  gather_facts: true
+
+  vars:
+    certs_location: "/home/ubuntu/certs"
+    remote_location: "/var/lib/kubelet"
+
+  tasks:
+    - name: Create /var/lib/kubelet directory if it does not exist
+      file:
+        path: "{{ remote_location }}"
+        state: directory
+        mode: 0755
+      become: true
+      become_user: root
+
+    - name: Copy ca.crt to worker nodes
+      copy:
+        src: "{{ certs_location }}/ca.crt"
+        dest: "{{ remote_location }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+      become: true
+      become_user: root
+    
+    - name: copy workernode1 certificates
+      copy: 
+        src: "{{ item }}"
+        dest: "{{ remote_location }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+      loop:
+        -  "{{ certs_location }}/workernode1.key"
+        -  "{{ certs_location }}/workernode1.crt"
+      when: inventory_hostname == "workernode1"
+      become: true
+      become_user: root
+
+    - name: rename workernode1.key and workernode1.crt to kubelet.key and kubelet.crt
+      shell: |
+        cd "{{ remote_location }}" &&
+        {
+          mv workernode1.key kubelet.key
+          mv workernode1.crt kubelet.crt
+        }
+      when: inventory_hostname == "workernode1"
+      become: true
+      become_user: root
+
+    - name: copy workernode2 certificates
+      copy: 
+        src: "{{ item }}"
+        dest: "{{ remote_location }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+      loop:
+        -  "{{ certs_location }}/workernode2.key"
+        -  "{{ certs_location }}/workernode2.crt"
+      when: inventory_hostname == "workernode2"
+      become: true
+      become_user: root
+
+    - name: rename workernode2.key and workernode2.crt to kubelet.key and kubelet.crt
+      shell: |
+        cd "{{ remote_location }}" &&
+        {
+          mv workernode2.key kubelet.key
+          mv workernode2.crt kubelet.crt
+        }
+      when: inventory_hostname == "workernode2"
+      become: true
+      become_user: root
+
+- hosts: controller
+  name: Distribute Certificates to control nodes
+  become: true
+  become_user: ubuntu
+  gather_facts: true
+
+  vars:
+    certs_location: "/home/ubuntu/certs"
+    remote_location: "/home/ubuntu"
+
+  tasks:
+    - name: copy certificates to controller node
+      copy: 
+        src: "{{ item }}"
+        dest: "{{ remote_location }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+      loop:
+        -  "{{ certs_location }}/ca.crt"
+        -  "{{ certs_location }}/ca.key"
+        -  "{{ certs_location }}/kube-api-server.key"
+        -  "{{ certs_location }}/kube-api-server.crt"
+        -  "{{ certs_location }}/service-accounts.key"
+        -  "{{ certs_location }}/service-accounts.crt"

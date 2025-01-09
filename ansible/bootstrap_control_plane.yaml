@@ -1,0 +1,225 @@
+- hosts: controller
+  name: Bootstrap the control plane components
+  gather_facts: true
+
+  vars:
+    downloads_location: "/home/ubuntu/downloads"
+    certs_location: "/home/ubuntu"
+
+  tasks:
+    - name: Create /etc/kubernetes/config directory if it doesn't exist
+      shell: sudo mkdir -p /etc/kubernetes/config
+      become: true
+      become_user: root
+
+    - name: Copy control plane binaries to controller node
+      copy: 
+        src: "{{ downloads_location }}/{{ item }}"
+        dest: /usr/local/bin/
+      loop:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+        - kubectl
+      become: true
+      become_user: root
+
+    - name: Make control plane binaries executable
+      shell: chmod +x "/usr/local/bin/{{ item }}"
+      loop:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+        - kubectl
+      become: true
+      become_user: root
+
+    - name: Create /var/lib/kubernetes/ directory if it doesn't exist
+      shell: sudo mkdir -p /var/lib/kubernetes
+      become: true
+      become_user: root
+    
+    - name: Copy kubernetes keys and encryption config
+      copy:
+        src: "{{ certs_location }}/{{ item }}"
+        dest: /var/lib/kubernetes/
+        remote_src: yes
+      loop:
+        - ca.crt
+        - ca.key
+        - kube-api-server.key
+        - kube-api-server.crt
+        - service-accounts.key
+        - service-accounts.crt
+        - encryption-config.yaml
+      become: true
+      become_user: root
+
+    - name: Create the `kube-apiserver.service` systemd unit file
+      shell: |
+        cat <<EOF | sudo tee /etc/systemd/system/kube-apiserver.service
+        [Unit]
+        Description=Kubernetes API Server
+        Documentation=https://github.com/kubernetes/kubernetes
+
+        [Service]
+        ExecStart=/usr/local/bin/kube-apiserver \\
+          --allow-privileged=true \\
+          --apiserver-count=1 \\
+          --audit-log-maxage=30 \\
+          --audit-log-maxbackup=3 \\
+          --audit-log-maxsize=100 \\
+          --audit-log-path=/var/log/audit.log \\
+          --authorization-mode=Node,RBAC \\
+          --bind-address=0.0.0.0 \\
+          --client-ca-file=/var/lib/kubernetes/ca.crt \\
+          --enable-admission-plugins=NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
+          --etcd-servers=http://127.0.0.1:2379 \\
+          --event-ttl=1h \\
+          --encryption-provider-config=/var/lib/kubernetes/encryption-config.yaml \\
+          --kubelet-certificate-authority=/var/lib/kubernetes/ca.crt \\
+          --kubelet-client-certificate=/var/lib/kubernetes/kube-api-server.crt \\
+          --kubelet-client-key=/var/lib/kubernetes/kube-api-server.key \\
+          --runtime-config='api/all=true' \\
+          --service-account-key-file=/var/lib/kubernetes/service-accounts.crt \\
+          --service-account-signing-key-file=/var/lib/kubernetes/service-accounts.key \\
+          --service-account-issuer=https://controlnode1.kubernetes.local:6443 \\
+          --service-cluster-ip-range=10.32.0.0/24 \\
+          --service-node-port-range=30000-32767 \\
+          --tls-cert-file=/var/lib/kubernetes/kube-api-server.crt \\
+          --tls-private-key-file=/var/lib/kubernetes/kube-api-server.key \\
+          --v=2
+        Restart=on-failure
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      become: true
+      become_user: root
+    
+    - name: Copy kubeconfig within the remote host
+      copy:
+        src: /home/ubuntu/kube-controller-manager.kubeconfig
+        dest: /var/lib/kubernetes/
+        remote_src: yes
+      become: true
+      become_user: root
+
+    - name: Create the `kube-controller-manager.service` systemd unit file
+      shell: |
+        cat << EOF | sudo tee /etc/systemd/system/kube-controller-manager.service
+        [Unit]
+        Description=Kubernetes Controller Manager
+        Documentation=https://github.com/kubernetes/kubernetes
+
+        [Service]
+        ExecStart=/usr/local/bin/kube-controller-manager \\
+          --bind-address=0.0.0.0 \\
+          --cluster-cidr=10.200.0.0/16 \\
+          --cluster-name=kubernetes \\
+          --cluster-signing-cert-file=/var/lib/kubernetes/ca.crt \\
+          --cluster-signing-key-file=/var/lib/kubernetes/ca.key \\
+          --kubeconfig=/var/lib/kubernetes/kube-controller-manager.kubeconfig \\
+          --root-ca-file=/var/lib/kubernetes/ca.crt \\
+          --service-account-private-key-file=/var/lib/kubernetes/service-accounts.key \\
+          --service-cluster-ip-range=10.32.0.0/24 \\
+          --use-service-account-credentials=true \\
+          --v=2
+        Restart=on-failure
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      become: true
+      become_user: root
+
+    - name: Copy kubeconfig within the remote host
+      copy:
+        src: /home/ubuntu/kube-scheduler.kubeconfig
+        dest: /var/lib/kubernetes/
+        remote_src: yes
+      become: true
+      become_user: root
+
+    - name: Create the kube-scheduler.yaml configuration file
+      shell: |
+        cat <<EOF | sudo tee /etc/kubernetes/config/kube-scheduler.yaml
+        apiVersion: kubescheduler.config.k8s.io/v1
+        kind: KubeSchedulerConfiguration
+        clientConnection:
+          kubeconfig: "/var/lib/kubernetes/kube-scheduler.kubeconfig"
+        leaderElection:
+          leaderElect: true
+        EOF
+      become: true
+      become_user: root
+
+    - name: Create the `kube-scheduler.service` systemd unit file
+      shell: |
+        cat << EOF | sudo tee /etc/systemd/system/kube-scheduler.service
+        [Unit]
+        Description=Kubernetes Scheduler
+        Documentation=https://github.com/kubernetes/kubernetes
+
+        [Service]
+        ExecStart=/usr/local/bin/kube-scheduler \\
+          --config=/etc/kubernetes/config/kube-scheduler.yaml \\
+          --v=2
+        Restart=on-failure
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      become: true
+      become_user: root
+
+    - name: Start the control plane services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      loop:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+      become: true
+      become_user: root
+    
+    - pause:
+        seconds: 30
+    
+    - name: Check the status of the control plane services
+      shell: systemctl status kube-apiserver kube-controller-manager kube-scheduler
+      register: services_result
+      no_log: True
+      become: true
+      become_user: root
+
+    - name: Show service results 
+      debug:
+        msg:
+        - "{{ services_result.stdout_lines }}" 
+
+    - name: Use kubectl to get cluster info
+      shell: kubectl cluster-info --kubeconfig /home/ubuntu/admin.kubeconfig
+      register: cluster_info_results
+      no_log: True
+
+    - name: Show cluster info results 
+      debug:
+        msg:
+        - "{{ cluster_info_results.stdout_lines }}" 
+
+    - name: Use kubectl to check componentstatuses
+      shell: kubectl get componentstatuses --kubeconfig /home/ubuntu/admin.kubeconfig
+      register: component_result
+      no_log: True
+
+    - name: Show componentstatuses results 
+      debug:
+        msg:
+        - "{{ component_result.stdout_lines }}" 

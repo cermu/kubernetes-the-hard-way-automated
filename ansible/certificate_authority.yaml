@@ -1,0 +1,24 @@
+- hosts: local
+  name: Provision a Certificate Authority
+  become: true
+  become_user: ubuntu
+  gather_facts: true
+
+  vars:
+    ca_conf: "/home/ubuntu/kubernetes_the_hard_way/ansible/ca.conf"
+    certs_location: "/home/ubuntu/certs"
+  
+  tasks:
+    - name: Create certificate directory
+      file:
+        path: "{{ certs_location }}"
+        state: directory
+        mode: 0755
+    
+    - name: Create CA certificate and private key
+      shell: |
+        cd "{{ certs_location }}" &&
+        {
+          openssl genrsa -out ca.key 4096
+          openssl req -x509 -new -sha512 -noenc -key ca.key -days 3653 -config "{{ ca_conf }}" -out ca.crt
+        }

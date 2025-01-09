@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  Deploy a K8s Control Plane EC2 instance
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Instance Configuration"
+        Parameters:
+          - InstanceType
+          - AMIId
+          - KeyName
+          - EC2InstanceName
+          - EC2InstanceProfileName
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - PrivateSubnetId
+          - SecurityGroupIds
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.medium
+    Description: EC2 instance type
+    AllowedValues:
+         - t2.micro
+         - t2.small
+         - t2.medium
+  EC2InstanceName:
+    Type: String
+    Default: ControlNode1
+    Description: EC2 instance name
+  EC2InstanceProfileName:
+    Type: String
+    Default: k8sthw-instance-profile
+    Description: EC2 instance profile name
+  AMIId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0d64bb532e0502c46
+    Description: Amazon Machine Image (AMI) ID
+  PrivateSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for a private subnet
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: List of security group IDs to associate with the instance
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: my_keypair_name
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+
+Resources:
+  ControlPlaneEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMIId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref EC2InstanceProfileName
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp2
+            DeleteOnTermination: true
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      SubnetId: !Ref PrivateSubnetId
+      Tags:
+        - Value: !Ref EC2InstanceName
+          Key: Name
+        - Key: auto-delete
+          Value: never
+        - Key: Project
+          Value: k8sthw
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          sudo apt-get update -y
+          sudo swapoff -a
+
+Outputs:
+  InstanceId:
+    Description: The ID of the Control Plane EC2 instance
+    Value: !Ref ControlPlaneEC2Instance
+  InstancePrivateIP:
+    Description: The public IP address of the Control Plane EC2 instance
+    Value: !GetAtt ControlPlaneEC2Instance.PrivateIp

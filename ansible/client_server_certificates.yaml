@@ -1,0 +1,83 @@
+- hosts: local
+  name: Provision TLS certificates for client and server
+  become: true
+  become_user: ubuntu
+  gather_facts: true
+
+  vars:
+    ca_conf: "/home/ubuntu/kubernetes_the_hard_way/ansible/ca.conf"
+    certs_location: "/home/ubuntu/certs"
+  
+  tasks:
+    - name: Create certificate directory if it doesn't exist
+      file:
+        path: "{{ certs_location }}"
+        state: directory
+        mode: 0755
+    
+    - name: Create Admin client certificates
+      shell: |
+        cd "{{ certs_location }}" &&
+        {
+          openssl genrsa -out admin.key 4096
+          openssl req -new -key "admin.key" -sha256 -config "{{ ca_conf }}" -section admin -out "admin.csr"
+          openssl x509 -req -days 3653 -in "admin.csr" -copy_extensions copyall -sha256 -CA "ca.crt" -CAkey "ca.key" -CAcreateserial -out "admin.crt"
+        }
+
+    - name: Create certificates for each worker node
+      shell: |
+        cd "{{ certs_location }}" &&
+        {
+          openssl genrsa -out workernode1.key 4096
+          openssl req -new -key "workernode1.key" -sha256 -config "{{ ca_conf }}" -section workernode1 -out "workernode1.csr"
+          openssl x509 -req -days 3653 -in "workernode1.csr" -copy_extensions copyall -sha256 -CA "ca.crt" -CAkey "ca.key" -CAcreateserial -out "workernode1.crt"
+
+          openssl genrsa -out workernode2.key 4096
+          openssl req -new -key "workernode2.key" -sha256 -config "{{ ca_conf }}" -section workernode2 -out "workernode2.csr"
+          openssl x509 -req -days 3653 -in "workernode2.csr" -copy_extensions copyall -sha256 -CA "ca.crt" -CAkey "ca.key" -CAcreateserial -out "workernode2.crt"
+        }
+
+    - name: Create certificates for kube proxy
+      shell: |
+        cd "{{ certs_location }}" &&
+        {
+          openssl genrsa -out kube-proxy.key 4096
+          openssl req -new -key "kube-proxy.key" -sha256 -config "{{ ca_conf }}" -section kube-proxy -out "kube-proxy.csr"
+          openssl x509 -req -days 3653 -in "kube-proxy.csr" -copy_extensions copyall -sha256 -CA "ca.crt" -CAkey "ca.key" -CAcreateserial -out "kube-proxy.crt"
+        }
+    
+    - name: Create certificates for kube scheduler
+      shell: |
+        cd "{{ certs_location }}" &&
+        {
+          openssl genrsa -out kube-scheduler.key 4096
+          openssl req -new -key "kube-scheduler.key" -sha256 -config "{{ ca_conf }}" -section kube-scheduler -out "kube-scheduler.csr"
+          openssl x509 -req -days 3653 -in "kube-scheduler.csr" -copy_extensions copyall -sha256 -CA "ca.crt" -CAkey "ca.key" -CAcreateserial -out "kube-scheduler.crt"
+        }
+
+    - name: Create certificates for kube control manager
+      shell: |
+        cd "{{ certs_location }}" &&
+        {
+          openssl genrsa -out kube-controller-manager.key 4096
+          openssl req -new -key "kube-controller-manager.key" -sha256 -config "{{ ca_conf }}" -section kube-controller-manager -out "kube-controller-manager.csr"
+          openssl x509 -req -days 3653 -in "kube-controller-manager.csr" -copy_extensions copyall -sha256 -CA "ca.crt" -CAkey "ca.key" -CAcreateserial -out "kube-controller-manager.crt"
+        }
+
+    - name: Create certificates for kube API server
+      shell: |
+        cd "{{ certs_location }}" &&
+        {
+          openssl genrsa -out kube-api-server.key 4096
+          openssl req -new -key "kube-api-server.key" -sha256 -config "{{ ca_conf }}" -section kube-api-server -out "kube-api-server.csr"
+          openssl x509 -req -days 3653 -in "kube-api-server.csr" -copy_extensions copyall -sha256 -CA "ca.crt" -CAkey "ca.key" -CAcreateserial -out "kube-api-server.crt"
+        }
+
+    - name: Create certificates for service accounts
+      shell: |
+        cd "{{ certs_location }}" &&
+        {
+          openssl genrsa -out service-accounts.key 4096
+          openssl req -new -key "service-accounts.key" -sha256 -config "{{ ca_conf }}" -section service-accounts -out "service-accounts.csr"
+          openssl x509 -req -days 3653 -in "service-accounts.csr" -copy_extensions copyall -sha256 -CA "ca.crt" -CAkey "ca.key" -CAcreateserial -out "service-accounts.crt"
+        }

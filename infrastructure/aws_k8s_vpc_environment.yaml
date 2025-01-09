@@ -1,0 +1,525 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  >
+  This template deploys a VPC, 2 public and 2 private subnets, internet gateway, default route for public subnets, NAT gateway, and default routes for the private subnets.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: VPC Configuration
+        Parameters:
+          - VpcCIDR
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+          - PrivateSubnet3CIDR
+      - Label:
+          default: Environment Configuration
+        Parameters:
+          - EnvironmentName
+      - Lable:
+          default: Inbound Traffic Configuration
+        Parameters:
+          - SecurityGroupIngressAllowCIDR
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+    Default: demo
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR) for this VPC
+    Type: String
+    Default: 10.30.0.0/16
+
+  SecurityGroupIngressAllowCIDR:
+    Description: Please enter the IP range (CIDR) allowed for SG ingress.
+    Type: String
+    Default: x.x.x.x/32
+
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.30.1.0/24
+
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.30.2.0/24
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.30.10.0/24
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.30.20.0/24
+
+  PrivateSubnet3CIDR:
+    Description: Please enter the IP range (CIDR) for the private subnet in the third Availability Zone
+    Type: String
+    Default: 10.30.30.0/24
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Project
+          Value: k8sthw
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName}
+        - Key: Project
+          Value: k8sthw
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName} Public Subnet (AZ1)
+        - Key: Project
+          Value: k8sthw
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName} Public Subnet (AZ2)
+        - Key: Project
+          Value: k8sthw
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName} Private Subnet (AZ1)
+        - Key: Project
+          Value: k8sthw
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName} Private Subnet (AZ2)
+        - Key: Project
+          Value: k8sthw
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 2, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName} Private Subnet (AZ3)
+        - Key: Project
+          Value: k8sthw
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName}
+        - Key: Project
+          Value: k8sthw
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName}
+        - Key: Project
+          Value: k8sthw
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName} Public Routes
+        - Key: Project
+          Value: k8sthw
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Name
+          Value: !Sub K8s-${EnvironmentName} Private Routes (AZ1)
+        - Key: Project
+          Value: k8sthw
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet3
+
+  JumpboxSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "K8s-jumpbox-sg"
+      GroupDescription: "Allows ssh access to K8sjumpbox"
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Project
+          Value: k8sthw
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SecurityGroupIngressAllowCIDR
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  ControlPlaneSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "K8s-control-plane-sg"
+      GroupDescription: "Allows K8s control plane ports and protocols"
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Project
+          Value: k8sthw
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref JumpboxSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 6443
+          ToPort: 6443
+          CidrIp: !Ref SecurityGroupIngressAllowCIDR
+        - IpProtocol: tcp
+          FromPort: 6443
+          ToPort: 6443
+          CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: 10250
+          ToPort: 10259
+          CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: 2379
+          ToPort: 2380
+          CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: 6783
+          ToPort: 6783
+          CidrIp: !Ref VpcCIDR
+          Description: Weave net CNI TCP
+        - IpProtocol: udp
+          FromPort: 6783
+          ToPort: 6784
+          CidrIp: !Ref VpcCIDR
+          Description: Weave net CNI UDP
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: !Ref VpcCIDR
+          Description: CoreDNS service
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: !Ref VpcCIDR
+          Description: CoreDNS service
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  WorkedNodesSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "K8s-worker-nodes-sg"
+      GroupDescription: "Allows K8s worked nodes ports and protocols"
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Project
+          Value: k8sthw
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref JumpboxSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 10250
+          ToPort: 10250
+          CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: 30000
+          ToPort: 32767
+          CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: 6783
+          ToPort: 6783
+          CidrIp: !Ref VpcCIDR
+          Description: Weave net CNI TCP
+        - IpProtocol: udp
+          FromPort: 6783
+          ToPort: 6784
+          CidrIp: !Ref VpcCIDR
+          Description: Weave net CNI UDP
+        - IpProtocol: udp
+          FromPort: 4789
+          ToPort: 4789
+          CidrIp: !Ref VpcCIDR
+          Description: Weave net CNI UDP 4789
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: !Ref VpcCIDR
+          Description: CoreDNS service
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: !Ref VpcCIDR
+          Description: CoreDNS service
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+  SmokeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "K8s-smoke-test-sg"
+      GroupDescription: "Allows smoke testing K8s"
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Project
+          Value: k8sthw
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 30000
+          ToPort: 32767
+          CidrIp: !Ref SecurityGroupIngressAllowCIDR
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+  Ec2InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: k8sthw-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'
+  IamInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: k8sthw-instance-profile
+      Path: /
+      Roles: 
+       - !Ref Ec2InstanceRole
+
+Outputs:
+  VPC:
+    Description: A reference to the created VPC
+    Value: !Ref VPC
+  
+  ControlPlaneSG:
+    Description: K8s Control Plane security group
+    Value: !Ref ControlPlaneSecurityGroup
+
+  WorkerdNodesSG:
+    Description: K8s Worker nodes security group
+    Value: !Ref WorkedNodesSecurityGroup
+
+  JumpboxNodesSG:
+    Description: Jump box node security group
+    Value: !Ref JumpboxSecurityGroup
+
+  PublicSubnets:
+    Description: A list of the public subnets
+    Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2 ]]
+
+  PrivateSubnets:
+    Description: A list of the private subnets
+    Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3 ]]
+
+  PublicSubnet1:
+    Description: A reference to the public subnet in the 1st Availability Zone
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2:
+    Description: A reference to the public subnet in the 2nd Availability Zone
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1:
+    Description: A reference to the private subnet in the 1st Availability Zone
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2:
+    Description: A reference to the private subnet in the 2nd Availability Zone
+    Value: !Ref PrivateSubnet2
+
+  PrivateSubnet3:
+    Description: A reference to the private subnet in the 3rd Availability Zone
+    Value: !Ref PrivateSubnet3
+  
+  IamInstanceProfile:
+    Description: The Instance profile role
+    Value: !Ref IamInstanceProfile

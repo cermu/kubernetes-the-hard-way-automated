@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: 2010-09-09
+# k8s-jumpbox-ansible-instance
+Description: >
+  Deploy a jumpbox to access K8s nodes and ansible to configure the nodes.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Instance Configuration"
+        Parameters:
+          - InstanceType
+          - AMIId
+          - KeyName
+          - EC2InstanceName
+          - EC2InstanceProfileName
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - PublicSubnetId
+          - SecurityGroupId
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: EC2 instance type
+    AllowedValues:
+         - t2.micro
+  EC2InstanceName:
+    Type: String
+    Default: k8s-jumpbox-ansible
+    Description: EC2 instance name
+  EC2InstanceProfileName:
+    Type: String
+    Default: k8sthw-instance-profile
+    Description: EC2 instance profile name
+  AMIId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0d64bb532e0502c46
+    Description: Amazon Machine Image (AMI) ID
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for the public subnet
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: List of security group IDs to associate with the instance
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: my_keypair_name
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+
+Resources:
+  K8sJumpboxAnsibleEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMIId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref EC2InstanceProfileName
+      KeyName: !Ref KeyName
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp2
+            DeleteOnTermination: true
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      SubnetId: !Ref PublicSubnetId
+      Tags:
+        - Value: !Ref EC2InstanceName
+          Key: Name
+        - Key: Purpose
+          Value: Training
+        - Key: auto-delete
+          Value: never
+        - Key: Project
+          Value: k8sthw
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          sudo apt update -y
+          sudo apt install ansible -y
+
+Outputs:
+  InstanceId:
+    Description: The ID of the K8s jumpbox EC2 instance
+    Value: !Ref K8sJumpboxAnsibleEC2Instance
+  InstancePublicIP:
+    Description: The public IP address of the jumpbox EC2 instance
+    Value: !GetAtt K8sJumpboxAnsibleEC2Instance.PublicIp

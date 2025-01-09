@@ -1,0 +1,22 @@
+- hosts: allnodes
+  name: Update /etc/hosts
+  gather_facts: true
+
+  vars:
+    etc_host: "/etc/hosts"
+
+  tasks:
+    - name: Append to /etc/hosts
+      lineinfile: 
+        state: present
+        insertafter: EOF
+        dest: "{{ etc_host }}"
+        line: "{{ item }}"
+      with_items:
+        - "# Kubernetes the hard way"
+        - <controlnode1_Private_IP_Here> controlnode1.kubernetes.local controlnode1
+        - <workernode1_Private_IP_Here> workernode1.kubernetes.local workernode1
+        - <workernode2_Private_IP_Here> workernode2.kubernetes.local workernode2  
+      become: true
+      become_user: root
+ 
