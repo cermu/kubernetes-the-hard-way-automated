@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
-  Deploy a K8s Control Plane EC2 instance
+  Deploy an EC2 instance that will become kubernetes control plane node
 
 Metadata:
   AWS::CloudFormation::Interface:
