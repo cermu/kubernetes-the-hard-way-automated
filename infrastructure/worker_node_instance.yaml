@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
-  Deploy two EC2 instance that will become kubernetes worker nodes
+  Deploy two EC2 instances that will become kubernetes worker nodes
 Transform: 'AWS::LanguageExtensions'
 
 Metadata:
