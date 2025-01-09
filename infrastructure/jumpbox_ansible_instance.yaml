@@ -1,5 +1,4 @@
 AWSTemplateFormatVersion: 2010-09-09
-# k8s-jumpbox-ansible-instance
 Description: >
   Deploy a jumpbox to access K8s nodes and ansible to configure the nodes.
 
