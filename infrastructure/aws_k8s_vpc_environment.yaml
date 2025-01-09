@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description:  >
-  This template deploys a VPC, 2 public and 2 private subnets, internet gateway, default route for public subnets, NAT gateway, and default routes for the private subnets.
+  This template deploys a VPC, 2 public and 3 private subnets, internet gateway, default route for public subnets, NAT gateway, and default routes for the private subnets.
 
 Metadata:
   AWS::CloudFormation::Interface:
