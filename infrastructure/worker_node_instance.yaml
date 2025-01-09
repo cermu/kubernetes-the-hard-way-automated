@@ -1,7 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
-# K8s-worker-nodes-instance
 Description: >
-  Deploy a K8s Control Plane EC2 instance
+  Deploy two EC2 instance that will become kubernetes worker nodes
 Transform: 'AWS::LanguageExtensions'
 
 Metadata:
