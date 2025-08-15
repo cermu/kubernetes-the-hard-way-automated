@@ -22,10 +22,12 @@ Special thanks to [Kelsey Hightower](https://github.com/kelseyhightower)
 - [AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 
 # Cluster Details
-- kubernetes v1.31.2
-- containerd v2.0.0
-- cni v1.6.0
-- etcd v3.4.34
+- kubernetes v1.32.5
+- containerd 2.1.0-beta.0
+- runc v1.3.0
+- cri v1.32.0
+- cni v1.6.2
+- etcd v3.6.0
 - weavenetwork v2.8.1
 - helm v3.16.4
 
