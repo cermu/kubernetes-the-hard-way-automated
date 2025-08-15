@@ -101,6 +101,8 @@ cd ~
 mkdir -p kubernetes_the_hard_way/ansible
 ```
 
+- Copy all files from the repository's `ansible` directory to the created **kubernetes_the_hard_way/ansible** directory
+
 - Edit the `append_hosts.yaml` Ansible playbook and replace the following place holders with the actual Private IPs of the individual EC2 instances.
 ```
 <controlnode1_Private_IP_Here>
