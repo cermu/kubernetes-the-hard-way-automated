@@ -6,11 +6,12 @@
     downloads_location: "/home/ubuntu/downloads"
     remote_location: "/tmp"
     remote_certs_location: "/home/ubuntu"
+    ETCD_VERSION: "v3.6.0"
 
   tasks:
     - name: copy etcd binaries to controller node
       copy: 
-        src: "{{ downloads_location }}/etcd-v3.4.34-linux-amd64.tar.gz"
+        src: "{{ downloads_location }}/etcd-{{ ETCD_VERSION }}-rc.3-linux-amd64.tar.gz"
         dest: "{{ remote_location }}"
         mode: 0440
       become: true
@@ -18,14 +19,14 @@
       
     - name: Extract etcd into {{ remote_location }}
       unarchive:
-        src: "{{ remote_location }}/etcd-v3.4.34-linux-amd64.tar.gz"
+        src: "{{ remote_location }}/etcd-{{ ETCD_VERSION }}-rc.3-linux-amd64.tar.gz"
         dest: "{{ remote_location }}"
         remote_src: yes
       become: true
       become_user: root
 
     - name: Move etcd to /usr/local/bin
-      shell: mv {{ remote_location }}/etcd-v3.4.34-linux-amd64/etcd* /usr/local/bin
+      shell: mv {{ remote_location }}/etcd-{{ ETCD_VERSION }}-rc.3-linux-amd64/etcd* /usr/local/bin
       become: true
       become_user: root
 

@@ -4,19 +4,20 @@
   gather_facts: true
 
   vars:
+    cluster_cidr: "10.200.0.0/16"
+    cluster_dns: "10.32.0.10"
     downloads_location: "/home/ubuntu/downloads"
     certs_location: "/home/ubuntu"
     binaries_location: "/home/ubuntu/binaries"
+    CONTAINERD_VERSION: "2.1.0-beta.0"
+    RUNC_VERSION: "v1.3.0"
+    CRI_VERSION: "v1.32.0"
+    CNI_VERSION: "v1.6.2"
   
   tasks:
     - name: Set HOSTNAME as fact
       set_fact:
-        HOSTNAME: "{{ 'workernode1' if inventory_hostname == 'workernode1' else 'workernode2' if inventory_hostname == 'workernode2' else 'workernodex' }}"
-
-    - name: Print the set HOSTNAME fact
-      debug:
-        msg:
-        - "This machine HOSTNAME is: '{{ HOSTNAME }}'" 
+        HOSTNAME: "{{ 'workernode1' if inventory_hostname == 'workernode1' else 'workernode2' if inventory_hostname == 'workernode2' else 'workernodex' }}"   
 
     - name: Create remote binaries directory if it does not exist
       file:
@@ -32,9 +33,9 @@
         dest: "{{ binaries_location }}"
       loop:
         - runc.amd64
-        - crictl-v1.31.1-linux-amd64.tar.gz
-        - cni-plugins-linux-amd64-v1.6.0.tgz
-        - containerd-2.0.0-linux-amd64.tar.gz
+        - crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz
+        - cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz
+        - containerd-{{ CONTAINERD_VERSION }}-linux-amd64.tar.gz
         - kubectl
         - kubelet
         - kube-proxy
@@ -46,7 +47,7 @@
       become: true
       become_user: ubuntu
 
-    - name: Install socat conntrack and ipset
+    - name: Install socat conntrack ipset and kmod
       apt:
         name: "{{ item }}"
         state: present
@@ -54,6 +55,7 @@
         - socat
         - conntrack
         - ipset
+        - kmod
       become: true
       become_user: root
 
@@ -92,9 +94,9 @@
       become: true
       become_user: root
 
-    - name: Extract crictl-v1.31.1-linux-amd64.tar.gz into /usr/local/bin/
+    - name: Extract crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz into /usr/local/bin/
       unarchive:
-        src: "{{ binaries_location }}/crictl-v1.31.1-linux-amd64.tar.gz"
+        src: "{{ binaries_location }}/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
         dest: /usr/local/bin/
         remote_src: yes
       become: true
@@ -111,8 +113,8 @@
       become: true
       become_user: root
 
-    - name: Extract cni-plugins-linux-amd64-v1.6.0.tgz into /opt/cni/bin/
-      shell: "tar -xvzf {{ binaries_location }}/cni-plugins-linux-amd64-v1.6.0.tgz  -C /opt/cni/bin/"
+    - name: Extract cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz into /opt/cni/bin/
+      shell: "tar -xvzf {{ binaries_location }}/cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz  -C /opt/cni/bin/"
       become: true
       become_user: root
     
@@ -125,9 +127,9 @@
       become: true
       become_user: root
 
-    - name: Create /etc/modules-load.d/containerd.conf config file
+    - name: Create /etc/modules-load.d/k8s.conf config file
       shell: |
-        cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+        cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
         overlay
         br_netfilter
         EOF
@@ -144,9 +146,16 @@
       become: true
       become_user: root
 
+    - name: enable IP forwarding
+      shell: |
+        sysctl net.ipv4.conf.all.forwarding=1
+        echo "net.ipv4.conf.all.forwarding=1" | tee -a /etc/sysctl.conf
+      become: true
+      become_user: root
+
     - name: Apply the new settings without restarting
       shell: |
-        sudo sysctl -system
+        sudo sysctl --system
       become: true
       become_user: root
 
@@ -158,9 +167,9 @@
       become: true
       become_user: ubuntu
 
-    - name: Extract containerd-2.0.0-linux-amd64.tar.gz  into /home/ubuntu/containerd/
+    - name: Extract containerd-{{ CONTAINERD_VERSION }}-linux-amd64.tar.gz  into /home/ubuntu/containerd/
       unarchive:
-        src: "{{ binaries_location }}/containerd-2.0.0-linux-amd64.tar.gz"
+        src: "{{ binaries_location }}/containerd-{{ CONTAINERD_VERSION }}-linux-amd64.tar.gz"
         dest: /home/ubuntu/containerd/
         remote_src: yes
       become: true
@@ -240,9 +249,10 @@
           mode: Webhook
         clusterDomain: "cluster.local"
         clusterDNS:
-          - "10.32.0.10"
+          - "{{ cluster_dns }}"
         cgroupDriver: systemd
         containerRuntimeEndpoint: "unix:///var/run/containerd/containerd.sock"
+        maxPods: 32
         resolvConf: "/run/systemd/resolve/resolv.conf"
         runtimeRequestTimeout: "15m"
         tlsCertFile: "/var/lib/kubelet/kubelet.crt"
@@ -284,7 +294,7 @@
         clientConnection:
           kubeconfig: "/var/lib/kube-proxy/kubeconfig"
         mode: "iptables"
-        clusterCIDR: "10.200.0.0/16"
+        clusterCIDR: "{{ cluster_cidr }}"
         EOF
       become: true
       become_user: root
