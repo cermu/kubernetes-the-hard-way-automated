@@ -106,6 +106,8 @@ mkdir -p kubernetes_the_hard_way/ansible
 <workernode2_Private_IP_Here>
 ```
 
+- Edit the `weave-daemonset-k8s.yaml` file and ensure the value of environment variable `IPALLOC_RANGE` is set to the same as the chosen cluster CIDR.
+
 - Transfer Ansible playbooks in *kubernetes-the-hard-way-automated/ansible* directory to the Ansible EC2 instance
 ```
 scp -i ~/path/to/keypair.pem *.yaml inventory ansible.cfg ca.conf ubuntu@<ANSIBLE_SERVER_PUBLIC_IP>:~/kubernetes_the_hard_way/ansible
